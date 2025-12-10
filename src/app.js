@@ -5,19 +5,22 @@ require('dotenv').config();
 
 const app = express();
 
-// 1. 中间件
+// 1. 中间件 (必须放在路由之前)
 app.use(cors()); // 允许跨域
 app.use(bodyParser.json()); // 解析 JSON 请求体
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// 2. 路由 (待添加)
+// 2. 路由
+require("./routes/wish.routes")(app);
+require("./routes/gallery.routes")(app);
+require("./routes/user.routes")(app);
+require("./routes/userGallery.routes")(app);
+require("./routes/globalStats.routes")(app);
+
 // 简单的健康检查路由
 app.get('/', (req, res) => {
   res.json({ message: 'Cyber Muyu API is running.' });
 });
-
-// const meritRoutes = require('./routes/merit.routes');
-// app.use('/api/merit', meritRoutes);
 
 // 3. 全局错误处理
 app.use((err, req, res, next) => {
@@ -26,4 +29,3 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
-

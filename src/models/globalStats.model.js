@@ -8,20 +8,12 @@ module.exports = (sequelize, DataTypes) => {
     stat_value: {
       type: DataTypes.BIGINT,
       defaultValue: 0
-    },
-    updated_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW
-    },
-    created_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW
     }
   }, {
     tableName: 'global_stats',
-    underscored: true
+    underscored: true,
+    timestamps: true 
   });
 
   return GlobalStats;
 };
-

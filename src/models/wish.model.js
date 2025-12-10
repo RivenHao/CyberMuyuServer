@@ -1,5 +1,11 @@
 module.exports = (sequelize, DataTypes) => {
   const Wish = sequelize.define("Wish", {
+    id: {
+      type: DataTypes.BIGINT,
+      primaryKey: true,
+      autoIncrement: true,
+      allowNull: false
+    },
     user_id: {
       type: DataTypes.BIGINT,
       allowNull: false
@@ -18,14 +24,6 @@ module.exports = (sequelize, DataTypes) => {
     },
     fulfilled_at: {
       type: DataTypes.DATE
-    },
-    created_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW
-    },
-    updated_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW
     }
   }, {
     tableName: 'wishes',
@@ -34,4 +32,3 @@ module.exports = (sequelize, DataTypes) => {
 
   return Wish;
 };
-

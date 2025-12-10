@@ -1,5 +1,11 @@
 module.exports = (sequelize, DataTypes) => {
   const User = sequelize.define("User", {
+    id: {
+      type: DataTypes.BIGINT,
+      primaryKey: true,
+      autoIncrement: true,
+      allowNull: false
+    },
     openid: {
       type: DataTypes.STRING(64),
       allowNull: false,
@@ -29,14 +35,6 @@ module.exports = (sequelize, DataTypes) => {
     },
     settings: {
       type: DataTypes.JSON
-    },
-    created_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW
-    },
-    updated_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW
     }
   }, {
     tableName: 'users',
@@ -45,4 +43,3 @@ module.exports = (sequelize, DataTypes) => {
 
   return User;
 };
-

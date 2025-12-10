@@ -1,27 +1,26 @@
 module.exports = (sequelize, DataTypes) => {
   const GalleryItem = sequelize.define("GalleryItem", {
+    id: {
+      type: DataTypes.BIGINT,
+      primaryKey: true,
+      autoIncrement: true,
+      allowNull: false
+    },
     title: {
       type: DataTypes.STRING(64),
-      allowNull: false
     },
     description: {
       type: DataTypes.STRING(1024)
     },
     image_url: {
       type: DataTypes.STRING(512),
-      allowNull: false
     },
     rarity: {
       type: DataTypes.INTEGER,
       defaultValue: 1
     },
-    created_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW
-    },
-    updated_at: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW
+    explanation: {
+      type: DataTypes.STRING(1024)
     }
   }, {
     tableName: 'gallery_items',
@@ -30,4 +29,3 @@ module.exports = (sequelize, DataTypes) => {
 
   return GalleryItem;
 };
-
