@@ -9,7 +9,6 @@ module.exports = (sequelize, DataTypes) => {
     openid: {
       type: DataTypes.STRING(64),
       allowNull: false,
-      unique: true
     },
     nickname: {
       type: DataTypes.STRING(64)
@@ -38,7 +37,14 @@ module.exports = (sequelize, DataTypes) => {
     }
   }, {
     tableName: 'users',
-    underscored: true
+    underscored: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ['openid'],
+        name: 'uk_openid'  // 指定固定的索引名，避免重复创建
+      }
+    ]
   });
 
   return User;

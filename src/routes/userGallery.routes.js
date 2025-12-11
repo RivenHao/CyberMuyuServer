@@ -4,6 +4,6 @@ module.exports = app => {
 
     // POST /api/userGallery/getGalleryList
     router.post("/getGalleryList", userGallery.getGalleryList);
-
+    router.post("/getUserGalleryList", userGallery.getUserGalleryList);
     app.use('/api/userGallery', router);
 };
