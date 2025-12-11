@@ -26,10 +26,10 @@ exports.addMerit = async (req, res) => {
   }
 };
 
-exports.getMerit = async (req, res) => {
+exports.getAllMerit = async (req, res) => {
   try {
     const stats = await GlobalStats.findByPk('total_merit');
-    res.send({ code: 0, data: { total_merit: stats } });
+    res.send({ code: 0, data: stats });
   } catch (err) {
     res.status(500).send({ code: 500, msg: "获取全服功德失败" });
   }

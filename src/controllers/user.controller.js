@@ -34,7 +34,7 @@ exports.devLogin = async (req, res) => {
 // 获取用户信息
 exports.getProfile = async (req, res) => {
   try {
-    const userId = req.headers.authorization?.split(' ')[1]; 
+    const userId = req.query.id; 
     if (!userId) {
       return res.status(401).send({ code: 401, msg: '未登录' });
     }
