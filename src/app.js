@@ -16,6 +16,7 @@ require("./routes/gallery.routes")(app);
 require("./routes/user.routes")(app);
 require("./routes/userGallery.routes")(app);
 require("./routes/globalStats.routes")(app);
+require("./routes/setting.routes")(app);
 
 // 简单的健康检查路由
 app.get('/', (req, res) => {

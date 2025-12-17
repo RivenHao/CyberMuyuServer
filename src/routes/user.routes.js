@@ -2,8 +2,11 @@ module.exports = app => {
   const users = require("../controllers/user.controller.js");
   const router = require("express").Router();
 
-  // POST /api/auth/dev-login
-  router.post("/dev-login", users.devLogin);
+  // POST /api/auth/dev-login (开发环境)
+  // router.post("/dev-login", users.devLogin);
+  
+  // POST /api/auth/wx-login (真实微信登录)
+  router.post("/wx-login", users.wxLogin);
   
   // GET /api/auth/profile
   router.get("/profile", users.getProfile);
