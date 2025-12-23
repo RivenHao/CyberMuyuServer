@@ -1,89 +1,127 @@
 const db = require("../models");
 const Wish = db.wishes;
-const User = db.users;
 
 exports.create = async (req, res) => {
+  const t = await db.sequelize.transaction();
+  
   try {
-    // 校验请求参数
-    if (!req.body.content || !req.body.user_id) {
-      return res
-        .status(400)
-        .send({ code: 400, msg: "愿望内容和用户ID不能为空" });
+    const { content, merit_cost } = req.body;
+
+    // 参数校验
+    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+      await t.rollback();
+      return res.status(400).send({ code: 400, msg: "愿望内容不能为空" });
     }
 
-    // 构建数据对象
-    const wishData = {
-      user_id: req.body.user_id,
-      content: req.body.content,
-      merit_cost: req.body.merit_cost,
+    if (!merit_cost || merit_cost <= 0 || !Number.isInteger(merit_cost)) {
+      await t.rollback();
+      return res.status(400).send({ code: 400, msg: "功德消耗必须是正整数" });
+    }
+
+    // 在事务中重新查询用户，获取最新余额
+    const freshUser = await db.users.findByPk(req.user.id, { transaction: t });
+
+    // 余额校验（使用最新数据）
+    if (Number(freshUser.current_merit) < merit_cost) {
+      await t.rollback();
+      return res.status(400).send({ code: 400, msg: "功德不足" });
+    }
+
+    // 1. 创建愿望
+    const wish = await Wish.create({
+      user_id: freshUser.id,
+      content: content.trim(),
+      merit_cost: merit_cost,
       status: "active",
-    };
+    }, { transaction: t });
 
-    // 保存到数据库
-    const data = await Wish.create(wishData);
+    // 2. 扣除功德
+    await freshUser.update({
+      current_merit: Number(freshUser.current_merit) - merit_cost
+    }, { transaction: t });
 
-    // 扣除用户当前功德
-    await User.decrement("current_merit", {
-      by: req.body.merit_cost,
-      where: { id: req.body.user_id },
-    });
+    await t.commit();
 
-    res.send({ code: 0, msg: "许愿成功", data: data });
+    res.send({ code: 0, msg: "许愿成功", data: wish });
   } catch (err) {
+    await t.rollback();
+    console.error("Create Wish Error:", err);
     res.status(500).send({ code: 500, msg: err.message || "许愿失败" });
   }
 };
 
 exports.getUserWishes = async (req, res) => {
   try {
+    const user = req.user; // 从中间件获取用户
+    
     const data = await Wish.findAll({
-      where: { user_id: req.query.user_id, status: "active" },
+      where: { user_id: user.id, status: "active" },
       order: [["created_at", "DESC"]],
     });
     res.send({ code: 0, msg: "success", data: data });
   } catch (err) {
-    res.status(500).send({ code: 500, msg: "查询失败" + err.message });
+    res.status(500).send({ code: 500, msg: "查询失败: " + err.message });
   }
 };
 
 // 还愿
 exports.fulfillWish = async (req, res) => {
+  const t = await db.sequelize.transaction();
+  
   try {
-    // 校验请求参数
-    if (!req.body.user_id || !req.body.id) {
-      return res
-        .status(400)
-        .send({ code: 400, msg: "用户ID和愿望ID不能为空" });
+    const { wish_id } = req.body;
+
+    // 参数校验
+    if (!wish_id) {
+      await t.rollback();
+      return res.status(400).send({ code: 400, msg: "愿望ID不能为空" });
     }
-    // 校验愿望是否存在
-    const wish = await Wish.findByPk(req.body.id);
-    if (!wish) {
-      return res
-        .status(404)
-        .send({ code: 404, msg: "愿望不存在" });
-    }
-    // 校验功德是否足够
-    if (wish.merit_cost > (await User.findByPk(req.body.user_id)).current_merit) {
-      return res
-        .status(400)
-        .send({ code: 400, msg: "功德不足" });
-    }
-    // 扣除用户当前功德
-    await User.decrement("current_merit", {
-      by: req.body.merit_cost,
-      where: { id: req.body.user_id },
+
+    // 在事务中重新查询用户，获取最新余额
+    const freshUser = await db.users.findByPk(req.user.id, { transaction: t });
+
+    // 查找愿望（必须是当前用户的）
+    const wish = await Wish.findOne({
+      where: { id: wish_id, user_id: freshUser.id },
+      transaction: t
     });
-    // 更新愿望状态
-    const data = await Wish.update(
-      {
-        status: "fulfilled",
-        fulfilled_at: new Date(),
-      },
-      { where: { user_id: req.body.user_id, id: req.body.id } }
-    );
-    
-    res.send({ code: 0, msg: "还愿成功", data: data });
+
+    if (!wish) {
+      await t.rollback();
+      return res.status(404).send({ code: 404, msg: "愿望不存在" });
+    }
+
+    if (wish.status === 'fulfilled') {
+      await t.rollback();
+      return res.status(400).send({ code: 400, msg: "该愿望已还愿" });
+    }
+
+    // 使用数据库中的 merit_cost，防止篡改
+    const meritCost = Number(wish.merit_cost);
+
+    // 余额校验（使用最新数据）
+    if (Number(freshUser.current_merit) < meritCost) {
+      await t.rollback();
+      return res.status(400).send({ code: 400, msg: "功德不足" });
+    }
+
+    // 1. 扣除功德
+    await freshUser.update({
+      current_merit: Number(freshUser.current_merit) - meritCost
+    }, { transaction: t });
+
+    // 2. 更新愿望状态
+    await wish.update({
+      status: "fulfilled",
+      fulfilled_at: new Date(),
+    }, { transaction: t });
+
+    await t.commit();
+
+    res.send({ code: 0, msg: "还愿成功", data: wish });
   } catch (err) {
-    res.status(500).send({ code: 500, msg: "还愿失败" + err.message });
+    await t.rollback();
+    console.error("Fulfill Wish Error:", err);
+    res.status(500).send({ code: 500, msg: "还愿失败: " + err.message });
   }
 };

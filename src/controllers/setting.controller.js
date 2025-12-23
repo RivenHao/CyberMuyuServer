@@ -4,14 +4,11 @@ const Setting = db.settings;
 // 获取用户设置
 exports.get = async (req, res) => {
   try {
-    const userId = req.headers.authorization?.split(' ')[1];
-    if (!userId) {
-      return res.status(401).send({ code: 401, msg: '未授权' });
-    }
+    const user = req.user; // 从中间件获取用户
 
     // 查找或创建默认设置
     const [setting] = await Setting.findOrCreate({
-      where: { user_id: userId },
+      where: { user_id: user.id },
       defaults: {
         sound: true,
         vibration: true,
@@ -23,7 +20,7 @@ exports.get = async (req, res) => {
 
     res.send({ code: 0, msg: '获取成功', data: setting });
   } catch (err) {
-    console.error(err);
+    console.error("Get Setting Error:", err);
     res.status(500).send({ code: 500, msg: err.message || "获取设置失败" });
   }
 };
@@ -31,20 +28,22 @@ exports.get = async (req, res) => {
 // 更新用户设置
 exports.update = async (req, res) => {
   try {
-    const userId = req.headers.authorization?.split(' ')[1];
-    if (!userId) {
-      return res.status(401).send({ code: 401, msg: '未授权' });
-    }
-
+    const user = req.user; // 从中间件获取用户
     const { sound, vibration, immersive_mode, auto_click, bgm } = req.body;
 
     // 查找或创建
-    let [setting, created] = await Setting.findOrCreate({
-      where: { user_id: userId },
-      defaults: { sound: true, vibration: true, immersive_mode: false, auto_click: false, bgm: false }
+    let [setting] = await Setting.findOrCreate({
+      where: { user_id: user.id },
+      defaults: { 
+        sound: true, 
+        vibration: true, 
+        immersive_mode: false, 
+        auto_click: false, 
+        bgm: false 
+      }
     });
 
-    // 更新传入的字段
+    // 只更新传入的字段
     const updateData = {};
     if (typeof sound === 'boolean') updateData.sound = sound;
     if (typeof vibration === 'boolean') updateData.vibration = vibration;
@@ -58,7 +57,7 @@ exports.update = async (req, res) => {
 
     res.send({ code: 0, msg: '更新成功', data: setting });
   } catch (err) {
-    console.error(err);
+    console.error("Update Setting Error:", err);
     res.status(500).send({ code: 500, msg: err.message || "更新设置失败" });
   }
 };

@@ -1,12 +1,11 @@
 module.exports = app => {
   const settings = require("../controllers/setting.controller.js");
+  const { authMiddleware } = require("../middlewares/auth.middleware.js");
   const router = require("express").Router();
 
-  // GET /api/setting - 获取设置
-  router.get("/", settings.get);
-
-  // PUT /api/setting - 更新设置
-  router.put("/", settings.update);
+  // 所有设置相关接口都需要登录
+  router.get("/", authMiddleware, settings.get);
+  router.put("/", authMiddleware, settings.update);
 
   app.use('/api/setting', router);
 };

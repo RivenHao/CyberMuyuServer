@@ -1,25 +1,24 @@
 module.exports = app => {
   const users = require("../controllers/user.controller.js");
+  const { authMiddleware } = require("../middlewares/auth.middleware.js");
   const router = require("express").Router();
 
-  // POST /api/auth/dev-login (开发环境)
-  // router.post("/dev-login", users.devLogin);
-  
-  // POST /api/auth/wx-login (真实微信登录)
+  // ========== 无需登录的接口 ==========
+  // POST /api/auth/wx-login (微信登录)
   router.post("/wx-login", users.wxLogin);
-  
-  // GET /api/auth/profile
-  router.get("/profile", users.getProfile);
 
-  // POST /api/auth/merit/sync (注意路径，这里其实建议放在 /api/user/merit/sync 更好，但为了方便暂时挂在 auth 下或者新建 user.routes)
-  // 这里我们稍微改一下挂载点，下面这一行是新增的
-  router.post("/merit/sync", users.syncMerit);
+  // ========== 需要登录的接口 ==========
+  // GET /api/auth/profile
+  router.get("/profile", authMiddleware, users.getProfile);
+
+  // POST /api/auth/merit/sync
+  router.post("/merit/sync", authMiddleware, users.syncMerit);
 
   // POST /api/auth/merit/decrease
-  router.post("/merit/decrease", users.decreaseMerit);
+  router.post("/merit/decrease", authMiddleware, users.decreaseMerit);
 
   // POST /api/auth/increasePoolLevel
-  router.post("/increasePoolLevel", users.increasePoolLevel);
+  router.post("/increasePoolLevel", authMiddleware, users.increasePoolLevel);
 
   app.use('/api/auth', router);
 };

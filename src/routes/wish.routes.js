@@ -1,10 +1,12 @@
 module.exports = (app) => {
   const wishes = require("../controllers/wish.controller.js");
+  const { authMiddleware } = require("../middlewares/auth.middleware.js");
   const router = require("express").Router();
 
-  // 定义具体的 URL 规则
-  router.post("/create", wishes.create); // POST /api/wishes -> 新增
-  router.get("/getUserWishes", wishes.getUserWishes); // GET /api/wishes/getUserWishes -> 查询用户愿望
-  router.post("/fulfillWish", wishes.fulfillWish); // POST /api/wishes/fulfillWish -> 还愿
+  // 所有愿望相关接口都需要登录
+  router.post("/create", authMiddleware, wishes.create);
+  router.get("/getUserWishes", authMiddleware, wishes.getUserWishes);
+  router.post("/fulfillWish", authMiddleware, wishes.fulfillWish);
+  
   app.use("/api/wish", router);
 };

@@ -75,15 +75,8 @@ exports.wxLogin = async (req, res) => {
 // 获取用户信息
 exports.getProfile = async (req, res) => {
   try {
-    const { openid } = req.body;
-    if (!openid) {
-      return res.status(401).send({ code: 401, msg: "未登录" });
-    }
-    const user = await User.findOne({ where: { openid } });
-    if (!user) {
-      return res.status(404).send({ code: 404, msg: "用户不存在" });
-    }
-    res.send({ code: 0, data: user });
+    // 用户信息已由 authMiddleware 挂载到 req.user
+    res.send({ code: 0, data: req.user });
   } catch (err) {
     res.status(500).send({ code: 500, msg: err.message });
   }
@@ -95,26 +88,23 @@ exports.syncMerit = async (req, res) => {
   const t = await db.sequelize.transaction();
 
   try {
-    const { openid, increment } = req.body;
+    const { increment } = req.body;
+    const user = req.user; // 从中间件获取用户
 
-    if (!openid || increment <= 0) {
-      await t.rollback(); // 虽没操作数据库，但好习惯
-      return res.status(400).send({ code: 400, msg: "参数无效" });
-    }
-
-    // 1. 更新用户功德
-    const user = await User.findOne({ where: { openid }, transaction: t });
-    if (!user) {
+    // 参数校验
+    if (!increment || increment <= 0 || !Number.isInteger(increment)) {
       await t.rollback();
-      return res.status(404).send({ code: 404, msg: "用户不存在" });
+      return res.status(400).send({ code: 400, msg: "increment 必须是正整数" });
     }
 
-    // 检查是否溢出 (可选逻辑，这里暂只负责加)
-    const newCurrent = Number(user.current_merit) + increment;
-    const newTotal = Number(user.total_merit) + increment;
-    const newOverflow = Number(user.overflow_merit); // 如果需要处理溢出逻辑可以在这加
+    // 重新查询用户（在事务中）
+    const freshUser = await User.findByPk(user.id, { transaction: t });
 
-    await user.update(
+    // 计算新值
+    const newCurrent = Number(freshUser.current_merit) + increment;
+    const newTotal = Number(freshUser.total_merit) + increment;
+
+    await freshUser.update(
       {
         current_merit: newCurrent,
         total_merit: newTotal,
@@ -123,8 +113,6 @@ exports.syncMerit = async (req, res) => {
     );
 
     // 2. 更新全服功德
-    // 使用 increment 方法更原子化，但为了拿到最新值，这里用 update 也可以
-    // 注意：GlobalStats 需要确保只有一行 'total_merit'
     let [globalStat] = await GlobalStats.findOrCreate({
       where: { stat_key: "total_merit" },
       defaults: { stat_value: 0 },
@@ -150,59 +138,83 @@ exports.syncMerit = async (req, res) => {
       },
     });
   } catch (err) {
-    await t.rollback(); // 发生任何错误，回滚所有操作
+    await t.rollback();
     console.error("Sync Merit Error:", err);
     res.status(500).send({ code: 500, msg: "同步失败" });
   }
 };
 
 exports.decreaseMerit = async (req, res) => {
+  const t = await db.sequelize.transaction();
+  
   try {
-    const { openid, decrement } = req.body;
-    if (!openid || decrement <= 0) {
-      return res.status(400).send({ code: 400, msg: "参数无效" });
+    const { decrement } = req.body;
+
+    // 参数校验
+    if (!decrement || decrement <= 0 || !Number.isInteger(decrement)) {
+      await t.rollback();
+      return res.status(400).send({ code: 400, msg: "decrement 必须是正整数" });
     }
-    const user = await User.findOne({ where: { openid } });
-    if (!user) {
-      return res.status(404).send({ code: 404, msg: "用户不存在" });
+
+    // 在事务中重新查询用户，获取最新余额
+    const freshUser = await User.findByPk(req.user.id, { transaction: t });
+    
+    // 余额校验（使用最新数据）
+    if (Number(freshUser.current_merit) < decrement) {
+      await t.rollback();
+      return res.status(400).send({ code: 400, msg: "功德不足" });
     }
-    const newCurrent = Number(user.current_merit) - decrement;
-    await user.update({
-      current_merit: newCurrent,
-      updated_at: new Date(),
-    });
+
+    const newCurrent = Number(freshUser.current_merit) - decrement;
+    await freshUser.update({ current_merit: newCurrent }, { transaction: t });
+
+    await t.commit();
+
     res.send({
       code: 0,
       msg: "功德减少成功",
       data: { current_merit: newCurrent },
     });
   } catch (err) {
+    await t.rollback();
     console.error("Decrease Merit Error:", err);
     res.status(500).send({ code: 500, msg: "功德减少失败" });
   }
 };
 
+// 功德池容量配置: 50/100/500/1000/2000/3000/4000/5000
+const POOL_CAPACITIES = [50, 100, 500, 1000, 2000, 3000, 4000, 5000];
+const MAX_POOL_LEVEL = POOL_CAPACITIES.length - 1; // 7
+
 exports.increasePoolLevel = async (req, res) => {
   try {
-    const { openid } = req.body;
-    if (!openid) {
-      return res.status(400).send({ code: 400, msg: "参数无效" });
+    const user = req.user; // 从中间件获取用户
+
+    // 检查是否已达上限
+    if (user.pool_level >= MAX_POOL_LEVEL) {
+      return res.status(400).send({ 
+        code: 400, 
+        msg: "功德池已达最大容量",
+        data: { pool_level: user.pool_level, max_capacity: POOL_CAPACITIES[MAX_POOL_LEVEL] }
+      });
     }
-    const user = await User.findOne({ where: { openid } });
-    if (!user) {
-      return res.status(404).send({ code: 404, msg: "用户不存在" });
-    }
-    await user.update({
-      pool_level: user.pool_level + 1,
-      updated_at: new Date(),
-    });
+
+    const newLevel = user.pool_level + 1;
+    await user.update({ pool_level: newLevel });
+
     res.send({
       code: 0,
       msg: "扩充容量成功",
-      data: { pool_level: user.pool_level + 1 },
+      data: { 
+        pool_level: newLevel,
+        new_capacity: POOL_CAPACITIES[newLevel]
+      },
     });
   } catch (err) {
     console.error("Increase Pool Level Error:", err);
     res.status(500).send({ code: 500, msg: "扩充容量失败" });
   }
 };
+
+// 导出常量供其他模块使用
+exports.POOL_CAPACITIES = POOL_CAPACITIES;
