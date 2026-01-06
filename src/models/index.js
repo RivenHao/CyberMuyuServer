@@ -30,6 +30,7 @@ db.galleryItems = require("./gallery.model.js")(sequelize, Sequelize);
 db.userGallery = require("./userGallery.model.js")(sequelize, Sequelize);
 db.globalStats = require("./globalStats.model.js")(sequelize, Sequelize);
 db.settings = require("./setting.model.js")(sequelize, Sequelize);
+db.muyuConfigs = require("./muyuConfig.model.js")(sequelize, Sequelize);
 
 // 建立关联关系
 // User <-> Wish (一对多)
@@ -53,6 +54,10 @@ db.galleryItems.belongsToMany(db.users, {
 // User <-> Setting (一对一)
 db.users.hasOne(db.settings, { foreignKey: "user_id", as: "setting" });
 db.settings.belongsTo(db.users, { foreignKey: "user_id", as: "user" });
+
+// User <-> MuyuConfig (一对一)
+db.users.hasOne(db.muyuConfigs, { foreignKey: "user_id", as: "muyuConfig" });
+db.muyuConfigs.belongsTo(db.users, { foreignKey: "user_id", as: "user" });
 
 module.exports = db;
 
