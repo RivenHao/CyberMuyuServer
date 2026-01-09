@@ -1,4 +1,5 @@
 const db = require("../models");
+const { msgSecCheck } = require("../utils/wxSecurity");
 const Wish = db.wishes;
 
 exports.create = async (req, res) => {
@@ -16,6 +17,16 @@ exports.create = async (req, res) => {
     if (!merit_cost || merit_cost <= 0 || !Number.isInteger(merit_cost)) {
       await t.rollback();
       return res.status(400).send({ code: 400, msg: "功德消耗必须是正整数" });
+    }
+
+    // 内容安全检测
+    const secResult = await msgSecCheck(content.trim(), req.user.openid, 2);
+    if (!secResult.pass) {
+      await t.rollback();
+      return res.status(400).send({ 
+        code: 400, 
+        msg: secResult.errmsg || "内容包含敏感信息，请修改后重试" 
+      });
     }
 
     // 在事务中重新查询用户，获取最新余额
