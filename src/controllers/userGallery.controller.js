@@ -75,6 +75,95 @@ exports.getGalleryList = async (req, res) => {
   }
 };
 
+/**
+ * 检查分享卡片状态（不解锁）
+ * 返回卡片信息和用户是否已拥有
+ */
+exports.checkShareCard = async (req, res) => {
+  try {
+    const user = req.user;
+    const { gallery_id } = req.body;
+
+    if (!gallery_id) {
+      return res.status(400).send({ code: 400, msg: "缺少卡片ID" });
+    }
+
+    // 1. 检查卡片是否存在
+    const card = await GalleryItem.findByPk(gallery_id);
+    if (!card) {
+      return res.status(404).send({ code: 404, msg: "卡片不存在" });
+    }
+
+    // 2. 检查用户是否已拥有
+    const existing = await UserGallery.findOne({
+      where: { user_id: user.id, item_id: gallery_id }
+    });
+
+    res.send({ 
+      code: 0, 
+      msg: "查询成功", 
+      data: {
+        card: card,
+        isOwned: !!existing
+      }
+    });
+  } catch (err) {
+    console.error("Check Share Card Error:", err);
+    res.status(500).send({ code: 500, msg: err.message || "查询失败" });
+  }
+};
+
+/**
+ * 通过分享解锁卡片
+ * 如果用户没有这张卡片，则解锁
+ */
+exports.unlockByShare = async (req, res) => {
+  const t = await db.sequelize.transaction();
+  
+  try {
+    const user = req.user;
+    const { gallery_id } = req.body;
+
+    if (!gallery_id) {
+      await t.rollback();
+      return res.status(400).send({ code: 400, msg: "缺少卡片ID" });
+    }
+
+    // 1. 检查卡片是否存在
+    const card = await GalleryItem.findByPk(gallery_id, { transaction: t });
+    if (!card) {
+      await t.rollback();
+      return res.status(404).send({ code: 404, msg: "卡片不存在" });
+    }
+
+    // 2. 检查用户是否已拥有
+    const existing = await UserGallery.findOne({
+      where: { user_id: user.id, item_id: gallery_id },
+      transaction: t
+    });
+
+    if (existing) {
+      await t.commit();
+      return res.send({ code: 1, msg: "你已拥有这张卡片", data: null, cardTitle: card.title });
+    }
+
+    // 3. 解锁卡片
+    await UserGallery.create({
+      user_id: user.id,
+      item_id: gallery_id,
+      acquired_at: new Date()
+    }, { transaction: t });
+
+    await t.commit();
+
+    res.send({ code: 0, msg: "解锁成功", data: card });
+  } catch (err) {
+    await t.rollback();
+    console.error("Unlock Card By Share Error:", err);
+    res.status(500).send({ code: 500, msg: err.message || "解锁失败" });
+  }
+};
+
 // 获取用户佛理卡片列表
 exports.getUserGalleryList = async (req, res) => {
   try {
