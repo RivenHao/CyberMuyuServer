@@ -34,3 +34,13 @@ exports.getAllMerit = async (req, res) => {
     res.status(500).send({ code: 500, msg: "获取全服功德失败" });
   }
 };
+
+exports.getShowWish = async (req, res) => {
+  try {
+    const stats = await GlobalStats.findByPk('show_wish');
+    const value = stats ? Number(stats.stat_value) : 0;
+    res.send({ code: 0, data: { show_wish: value === 1 } });
+  } catch (err) {
+    res.status(500).send({ code: 500, msg: "获取许愿配置失败" });
+  }
+};
