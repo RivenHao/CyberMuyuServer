@@ -14,9 +14,9 @@ exports.create = async (req, res) => {
       return res.status(400).send({ code: 400, msg: "愿望内容不能为空" });
     }
 
-    if (!merit_cost || merit_cost <= 0 || !Number.isInteger(merit_cost)) {
+    if (merit_cost === undefined || merit_cost === null || merit_cost < 0 || !Number.isInteger(merit_cost)) {
       await t.rollback();
-      return res.status(400).send({ code: 400, msg: "功德消耗必须是正整数" });
+      return res.status(400).send({ code: 400, msg: "功德消耗必须是非负整数" });
     }
 
     // 内容安全检测
@@ -32,10 +32,17 @@ exports.create = async (req, res) => {
     // 在事务中重新查询用户，获取最新余额
     const freshUser = await db.users.findByPk(req.user.id, { transaction: t });
 
-    // 余额校验（使用最新数据）
-    if (Number(freshUser.current_merit) < merit_cost) {
-      await t.rollback();
-      return res.status(400).send({ code: 400, msg: "功德不足" });
+    // merit_cost > 0 时才校验余额和扣功德
+    if (merit_cost > 0) {
+      if (Number(freshUser.current_merit) < merit_cost) {
+        await t.rollback();
+        return res.status(400).send({ code: 400, msg: "功德不足" });
+      }
+
+      // 扣除功德
+      await freshUser.update({
+        current_merit: Number(freshUser.current_merit) - merit_cost
+      }, { transaction: t });
     }
 
     // 1. 创建愿望
@@ -46,11 +53,6 @@ exports.create = async (req, res) => {
       status: "active",
     }, { transaction: t });
 
-    // 2. 扣除功德
-    await freshUser.update({
-      current_merit: Number(freshUser.current_merit) - merit_cost
-    }, { transaction: t });
-
     await t.commit();
 
     res.send({ code: 0, msg: "许愿成功", data: wish });
@@ -58,6 +60,78 @@ exports.create = async (req, res) => {
     await t.rollback();
     console.error("Create Wish Error:", err);
     res.status(500).send({ code: 500, msg: err.message || "许愿失败" });
+  }
+};
+
+// 接收分享的心愿（好友点开分享链接后调用，不扣功德）
+exports.receiveSharedWish = async (req, res) => {
+  try {
+    const { wish_id } = req.body;
+    const userId = req.user.id;
+
+    if (!wish_id) {
+      return res.status(400).send({ code: 400, msg: "缺少 wish_id" });
+    }
+
+    // 查找原始心愿
+    const originalWish = await Wish.findByPk(wish_id);
+    if (!originalWish) {
+      return res.status(404).send({ code: 404, msg: "心愿不存在" });
+    }
+
+    // 不能接收自己的心愿
+    if (Number(originalWish.user_id) === userId) {
+      return res.send({ code: 0, msg: "这是你自己的心愿", data: { duplicate: true } });
+    }
+
+    // 检查是否已有相同内容的心愿
+    const existing = await Wish.findOne({
+      where: { user_id: userId, content: originalWish.content, status: 'active' }
+    });
+
+    if (existing) {
+      return res.send({ code: 0, msg: "你已拥有这个心愿", data: { duplicate: true } });
+    }
+
+    // 创建心愿（不扣功德，merit_cost 设为 0）
+    const wish = await Wish.create({
+      user_id: userId,
+      content: originalWish.content,
+      merit_cost: 0,
+      status: "active",
+    });
+
+    res.send({ code: 0, msg: "收下心愿成功", data: { duplicate: false, wish } });
+  } catch (err) {
+    console.error("Receive Shared Wish Error:", err);
+    res.status(500).send({ code: 500, msg: err.message || "接收心愿失败" });
+  }
+};
+
+// 获取分享心愿的信息（好友打开分享链接时展示）
+exports.getSharedWish = async (req, res) => {
+  try {
+    const { wish_id } = req.query;
+    if (!wish_id) {
+      return res.status(400).send({ code: 400, msg: "缺少 wish_id" });
+    }
+
+    const wish = await Wish.findByPk(wish_id, {
+      attributes: ['id', 'content', 'created_at'],
+      include: [{
+        model: db.users,
+        as: 'user',
+        attributes: ['nickname', 'avatar_url']
+      }]
+    });
+
+    if (!wish) {
+      return res.status(404).send({ code: 404, msg: "心愿不存在" });
+    }
+
+    res.send({ code: 0, data: wish });
+  } catch (err) {
+    res.status(500).send({ code: 500, msg: "获取心愿失败: " + err.message });
   }
 };
 

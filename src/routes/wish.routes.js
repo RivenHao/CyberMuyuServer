@@ -7,6 +7,8 @@ module.exports = (app) => {
   router.post("/create", authMiddleware, wishes.create);
   router.get("/getUserWishes", authMiddleware, wishes.getUserWishes);
   router.post("/fulfillWish", authMiddleware, wishes.fulfillWish);
+  router.post("/receiveShared", authMiddleware, wishes.receiveSharedWish);
+  router.get("/getShared", authMiddleware, wishes.getSharedWish);
   
   app.use("/api/wish", router);
 };
