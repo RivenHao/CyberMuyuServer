@@ -93,11 +93,11 @@ exports.receiveSharedWish = async (req, res) => {
       return res.send({ code: 0, msg: "你已拥有这个心愿", data: { duplicate: true } });
     }
 
-    // 创建心愿（不扣功德，merit_cost 设为 0）
+    // 创建心愿（继承原始心愿的功德花费）
     const wish = await Wish.create({
       user_id: userId,
       content: originalWish.content,
-      merit_cost: 0,
+      merit_cost: originalWish.merit_cost,
       status: "active",
     });
 
